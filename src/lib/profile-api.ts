@@ -5,6 +5,7 @@ export type SkinTone = "white" | "brown" | "black" | "asian";
 
 export interface UserProfile {
   id: string;
+  user_id: string;
   height_cm: number;
   weight_kg: number;
   body_type: BodyType;
@@ -20,24 +21,16 @@ export interface ProfileInput {
   skin_tone: SkinTone;
 }
 
-const USER_ID_KEY = "style_fit_user_id";
-
-export function getStoredUserId(): string | null {
-  return localStorage.getItem(USER_ID_KEY);
+export async function getAuthenticatedUserId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id ?? null;
 }
 
-export function storeUserId(userId: string): void {
-  localStorage.setItem(USER_ID_KEY, userId);
-}
-
-export function clearUserId(): void {
-  localStorage.removeItem(USER_ID_KEY);
-}
-
-export async function createProfile(input: ProfileInput): Promise<{ userId: string; profile: UserProfile }> {
+export async function createProfile(userId: string, input: ProfileInput): Promise<UserProfile> {
   const { data, error } = await supabase
     .from("user_profiles")
     .insert({
+      user_id: userId,
       height_cm: input.height_cm,
       weight_kg: input.weight_kg,
       body_type: input.body_type,
@@ -50,15 +43,14 @@ export async function createProfile(input: ProfileInput): Promise<{ userId: stri
     throw new Error(error.message);
   }
 
-  storeUserId(data.id);
-  return { userId: data.id, profile: data as UserProfile };
+  return data as UserProfile;
 }
 
-export async function getProfile(userId: string): Promise<UserProfile | null> {
+export async function getProfileByUserId(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from("user_profiles")
     .select()
-    .eq("id", userId)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -68,7 +60,7 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
   return data as UserProfile | null;
 }
 
-export async function updateProfile(userId: string, input: ProfileInput): Promise<UserProfile> {
+export async function updateProfileByUserId(userId: string, input: ProfileInput): Promise<UserProfile> {
   const { data, error } = await supabase
     .from("user_profiles")
     .update({
@@ -77,7 +69,7 @@ export async function updateProfile(userId: string, input: ProfileInput): Promis
       body_type: input.body_type,
       skin_tone: input.skin_tone,
     })
-    .eq("id", userId)
+    .eq("user_id", userId)
     .select()
     .single();
 
@@ -89,17 +81,16 @@ export async function updateProfile(userId: string, input: ProfileInput): Promis
 }
 
 export async function saveOrUpdateProfile(
-  userId: string | null,
+  userId: string,
   input: ProfileInput
-): Promise<{ userId: string; profile: UserProfile; isNew: boolean }> {
-  if (userId) {
-    const existingProfile = await getProfile(userId);
-    if (existingProfile) {
-      const profile = await updateProfile(userId, input);
-      return { userId, profile, isNew: false };
-    }
+): Promise<{ profile: UserProfile; isNew: boolean }> {
+  const existingProfile = await getProfileByUserId(userId);
+  
+  if (existingProfile) {
+    const profile = await updateProfileByUserId(userId, input);
+    return { profile, isNew: false };
   }
   
-  const result = await createProfile(input);
-  return { ...result, isNew: true };
+  const profile = await createProfile(userId, input);
+  return { profile, isNew: true };
 }

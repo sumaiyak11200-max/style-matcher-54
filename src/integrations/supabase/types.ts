@@ -22,6 +22,7 @@ export type Database = {
           id: string
           skin_tone: string
           updated_at: string
+          user_id: string | null
           weight_kg: number
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           id?: string
           skin_tone: string
           updated_at?: string
+          user_id?: string | null
           weight_kg: number
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           id?: string
           skin_tone?: string
           updated_at?: string
+          user_id?: string | null
           weight_kg?: number
         }
         Relationships: []
