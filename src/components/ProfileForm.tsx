@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,16 +12,16 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   type BodyType,
   type SkinTone,
   type ProfileInput,
   type UserProfile,
-  getStoredUserId,
-  getProfile,
+  getProfileByUserId,
   saveOrUpdateProfile,
 } from "@/lib/profile-api";
-import { Loader2, CheckCircle2, RefreshCw, Sparkles, User } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles, User, LogOut } from "lucide-react";
 
 const BODY_TYPES: { value: BodyType; label: string }[] = [
   { value: "skinny", label: "Skinny" },
@@ -37,6 +38,8 @@ const SKIN_TONES: { value: SkinTone; label: string }[] = [
 ];
 
 export function ProfileForm() {
+  const { user, loading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [existingProfile, setExistingProfile] = useState<UserProfile | null>(null);
@@ -48,23 +51,29 @@ export function ProfileForm() {
   const [skinTone, setSkinTone] = useState<SkinTone | "">("");
 
   useEffect(() => {
-    loadExistingProfile();
-  }, []);
+    if (!authLoading && !user) {
+      navigate("/auth", { replace: true });
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      loadExistingProfile();
+    }
+  }, [user]);
 
   async function loadExistingProfile() {
+    if (!user) return;
     setIsLoading(true);
     try {
-      const userId = getStoredUserId();
-      if (userId) {
-        const profile = await getProfile(userId);
-        if (profile) {
-          setExistingProfile(profile);
-          setHeightCm(profile.height_cm.toString());
-          setWeightKg(profile.weight_kg.toString());
-          setBodyType(profile.body_type);
-          setSkinTone(profile.skin_tone);
-          setShowUpdatePrompt(true);
-        }
+      const profile = await getProfileByUserId(user.id);
+      if (profile) {
+        setExistingProfile(profile);
+        setHeightCm(profile.height_cm.toString());
+        setWeightKg(profile.weight_kg.toString());
+        setBodyType(profile.body_type);
+        setSkinTone(profile.skin_tone);
+        setShowUpdatePrompt(true);
       }
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -122,13 +131,14 @@ export function ProfileForm() {
   }
 
   async function handleSave() {
+    if (!user) return;
+    
     const input = validateInput();
     if (!input) return;
 
     setIsSaving(true);
     try {
-      const userId = getStoredUserId();
-      const result = await saveOrUpdateProfile(userId, input);
+      const result = await saveOrUpdateProfile(user.id, input);
       
       setExistingProfile(result.profile);
       setShowUpdatePrompt(true);
@@ -150,7 +160,12 @@ export function ProfileForm() {
     }
   }
 
-  if (isLoading) {
+  async function handleSignOut() {
+    await signOut();
+    navigate("/auth", { replace: true });
+  }
+
+  if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -158,8 +173,19 @@ export function ProfileForm() {
     );
   }
 
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="w-full max-w-lg mx-auto animate-slide-up">
+      <div className="flex justify-end mb-4">
+        <Button variant="ghost" size="sm" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
+        </Button>
+      </div>
+
       {showUpdatePrompt && existingProfile && (
         <Card className="mb-6 border-primary/20 bg-primary/5 shadow-soft">
           <CardContent className="pt-6">
